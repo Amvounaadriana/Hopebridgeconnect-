@@ -132,9 +132,10 @@ const DonorOrphanageDetails = () => {
   }
 
   if (!orphanage) {
+    // Gracefully handle missing/deleted orphanage
     return (
       <div className="text-center py-12">
-        <p className="text-muted-foreground mb-4">Orphanage not found</p>
+        <p className="text-muted-foreground mb-4">Orphanage not found. It may have been deleted.</p>
         <Button onClick={() => navigate("/donor/orphanages")}>Back to Orphanages</Button>
       </div>
     );
