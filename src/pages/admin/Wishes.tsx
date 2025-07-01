@@ -68,19 +68,13 @@ const AdminWishes = () => {
       
       try {
         setLoading(true);
-        
-        // First try to get the orphanageId from userProfile
-        let orphId = userProfile?.orphanageId;
-        
-        // If not found in userProfile, try to get it from the user document
-        if (!orphId) {
-          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            orphId = userData.orphanageId;
-          }
+        let orphId = null;
+        // Try to get orphanageId from user document
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.orphanageId) orphId = userData.orphanageId;
         }
-        
         // If still not found, try to get the orphanage by adminId
         if (!orphId) {
           const orphanages = await getOrphanagesByAdminId(currentUser.uid);
@@ -88,7 +82,6 @@ const AdminWishes = () => {
             orphId = orphanages[0].id;
           }
         }
-        
         if (!orphId) {
           console.error("No orphanage found for this admin");
           toast({
@@ -98,16 +91,12 @@ const AdminWishes = () => {
           });
           return;
         }
-        
         setOrphanageId(orphId);
-        
         // Fetch wishes
         const wishesData = await getWishesByOrphanage(orphId);
         setWishes(wishesData);
-        
         // Fetch children
         const childrenData = await getChildrenByOrphanage(orphId);
-        console.log("Fetched children data:", childrenData); // Debug log
         setChildren(childrenData);
       } catch (error) {
         console.error("Error fetching data:", error);

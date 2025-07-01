@@ -61,8 +61,8 @@ const VolunteerTasks = () => {
   // Add Task Form State
   const [newTask, setNewTask] = useState({
     title: "",
-    orphanageName: userProfile?.orphanageName || "",
-    location: userProfile?.location || "",
+    orphanageName: "",
+    location: "",
     category: "education",
     date: "",
     startTime: "",
@@ -186,19 +186,27 @@ const VolunteerTasks = () => {
   // Add new task to Firestore
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser?.uid || !userProfile?.orphanageName) {
+    if (!currentUser?.uid) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "You must be logged in and linked to an orphanage to add tasks.",
+        description: "You must be logged in to add tasks.",
       });
       return;
     }
+    // Fetch orphanageName from user document if needed
+    let orphanageName = "";
+    try {
+      const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        orphanageName = userData.orphanageName || "";
+      }
+    } catch {}
     try {
       await addDoc(collection(db, "tasks"), {
         ...newTask,
-        orphanageId: userProfile.uid,
-        orphanageName: userProfile.orphanageName,
+        orphanageName: orphanageName,
         filledSlots: 0,
         statuts: "open",
         createdAt: serverTimestamp(),
@@ -211,8 +219,8 @@ const VolunteerTasks = () => {
       setShowAddTask(false);
       setNewTask({
         title: "",
-        orphanageName: userProfile.orphanageName,
-        location: userProfile.location || "",
+        orphanageName: "",
+        location: "",
         category: "education",
         date: "",
         startTime: "",

@@ -97,11 +97,10 @@ const DonorOrphanageDetails = () => {
   // Helper function to get location display
   const getLocationDisplay = (): string => {
     if (!orphanage) return "Location not specified";
-    
-    if (orphanage.city && orphanage.country) {
-      return `${orphanage.city}, ${orphanage.country}`;
+    if ((orphanage as any).city && (orphanage as any).country) {
+      return `${(orphanage as any).city}, ${(orphanage as any).country}`;
     }
-    return orphanage.city || orphanage.country || "Location not specified";
+    return (orphanage as any).city || (orphanage as any).country || "Location not specified";
   };
 
   const allPendingWishes = children.flatMap(child =>
@@ -211,12 +210,6 @@ const DonorOrphanageDetails = () => {
                       <Users className="h-5 w-5 text-muted-foreground" />
                       <span>{orphanage.childrenCount || children.length || 0} children currently in care</span>
                     </div>
-                    {orphanage.establishedYear && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Established:</span>
-                        <span>{orphanage.establishedYear}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
                 
@@ -274,20 +267,18 @@ const DonorOrphanageDetails = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="h-64">
-              {typeof orphanage.coordinates?.lat === "number" && typeof orphanage.coordinates?.lng === "number" ? (
+              {/* Map display fallback: show message if coordinates are not available */}
+              {orphanage && (orphanage as any).lat && (orphanage as any).lng ? (
                 <MapContainer
-                  {...{
-                    center: [orphanage.coordinates.lat, orphanage.coordinates.lng] as [number, number],
-                    zoom: 13,
-                    style: { height: '100%', width: '100%' }
-                  } as any}
+                  center={[(orphanage as any).lat, (orphanage as any).lng] as [number, number]}
+                  zoom={13}
+                  style={{ height: '100%', width: '100%' }}
                 >
                   <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    // @ts-ignore
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   />
-                  <Marker position={[orphanage.coordinates.lat, orphanage.coordinates.lng] as [number, number]}>
+                  <Marker position={[(orphanage as any).lat, (orphanage as any).lng] as [number, number]}>
                     <Popup>
                       <div className="p-1">
                         <h3 className="font-medium text-sm">{orphanage.name}</h3>

@@ -80,7 +80,7 @@ const AdminVolunteers = () => {
         querySnapshot.forEach((doc) => {
           const data = doc.data();
           // Only show volunteers whose status is 'active' (approved)
-          if (data.status === "active") {
+          if (data.status === "active" || data.status === "pending") {
             volunteersData.push({
               id: doc.id,
               name: data.displayName || "Unknown",

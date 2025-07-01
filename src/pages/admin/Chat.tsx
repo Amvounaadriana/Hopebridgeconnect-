@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { listenToUserPresence } from "@/services/volunteer-service";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,7 @@ const AdminChat = () => {
   const [messageText, setMessageText] = useState("");
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [presenceUnsubs, setPresenceUnsubs] = useState<Record<string, () => void>>({});
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -62,7 +64,6 @@ const AdminChat = () => {
   useEffect(() => {
     if (!currentUser?.uid || !userProfile) return;
     setLoading(true);
-
     const fetchContacts = async () => {
       try {
         // 1. Get all other admins (exclude current admin by both doc.id and doc.data().uid)
@@ -85,23 +86,25 @@ const AdminChat = () => {
               lastMessage: { text: "", time: "", unread: false }
             };
           });
-
         // 2. Get orphanage(s) managed by this admin
         let orphanageIds: string[] = [];
-        if (userProfile.role === "admin") {
-          if (userProfile.orphanageId) {
-            orphanageIds = [userProfile.orphanageId];
-          } else {
-            // fallback: fetch orphanages by adminId
-            const orphanagesQuery = query(
-              collection(db, "orphanages"),
-              where("adminId", "==", currentUser.uid)
-            );
-            const orphanagesSnapshot = await getDocs(orphanagesQuery);
-            orphanageIds = orphanagesSnapshot.docs.map(doc => doc.id);
+        // Try to get orphanageId from user document
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.orphanageId) {
+            orphanageIds = [userData.orphanageId];
           }
         }
-
+        if (orphanageIds.length === 0) {
+          // fallback: fetch orphanages by adminId
+          const orphanagesQuery = query(
+            collection(db, "orphanages"),
+            where("adminId", "==", currentUser.uid)
+          );
+          const orphanagesSnapshot = await getDocs(orphanagesQuery);
+          orphanageIds = orphanagesSnapshot.docs.map(doc => doc.id);
+        }
         // 3. Get donors who have donated or sponsored to this orphanage
         let donorIds = new Set<string>();
         if (orphanageIds.length > 0) {
@@ -126,7 +129,6 @@ const AdminChat = () => {
             if (data.donorId) donorIds.add(data.donorId);
           });
         }
-
         // 4. Get volunteers assigned to this orphanage
         let volunteerIds = new Set<string>();
         if (orphanageIds.length > 0) {
@@ -138,7 +140,6 @@ const AdminChat = () => {
           const volunteersSnapshot = await getDocs(volunteersQuery);
           volunteersSnapshot.forEach(doc => volunteerIds.add(doc.id));
         }
-
         // 5. Fetch donor and volunteer user profiles
         const userIds = Array.from(new Set([
           ...Array.from(donorIds),
@@ -169,7 +170,6 @@ const AdminChat = () => {
             });
           }
         }
-
         // 6. Combine all contacts, filter to allowed roles
         let allContacts: Contact[] = [...adminContacts, ...donorVolunteerContacts]
           .filter(c => c.role === "admin" || c.role === "donor" || c.role === "volunteer")
@@ -178,7 +178,6 @@ const AdminChat = () => {
             // Type assertion for role
             role: c.role as "admin" | "donor" | "volunteer"
           }));
-
         // 7. For each contact, find or create a chat room (roomId)
         for (let contact of allContacts) {
           // Room participants: always [currentUser.uid, contact.id] (sorted)
@@ -204,7 +203,19 @@ const AdminChat = () => {
             contact.roomId = null;
           }
         }
-
+        // Set up presence listeners for each contact
+        const newPresenceUnsubs: Record<string, () => void> = {};
+        allContacts.forEach(contact => {
+          newPresenceUnsubs[contact.id] = listenToUserPresence(
+            contact.id,
+            (online) => {
+              setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, status: online ? "online" : "offline" } : c));
+            }
+          );
+        });
+        // Clean up old listeners
+        Object.values(presenceUnsubs).forEach(unsub => unsub && unsub());
+        setPresenceUnsubs(newPresenceUnsubs);
         setContacts(allContacts);
         setLoading(false);
 
@@ -231,6 +242,14 @@ const AdminChat = () => {
     // eslint-disable-next-line
   }, [currentUser?.uid, userProfile, searchParams, selectedContact]);
   
+  // Clean up presence listeners on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(presenceUnsubs).forEach(unsub => unsub && unsub());
+    };
+    // eslint-disable-next-line
+  }, []);
+
   // Effect to load messages for selected contact from Firestore
   useEffect(() => {
     if (!selectedContact || !currentUser?.uid) return;
@@ -296,19 +315,24 @@ const AdminChat = () => {
   };
   
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !selectedContact) return;
-    
+    if (!messageText.trim() || !selectedContact) {
+      toast({
+        title: "No contact selected",
+        description: "Please select a contact to send a message.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const contactData = contacts.find(c => c.id === selectedContact);
       if (!contactData?.roomId) {
         toast({
-          title: "Error",
-          description: "Couldn't find chat room",
+          title: "No chat room",
+          description: "Couldn't find or create a chat room for this contact.",
           variant: "destructive",
         });
         return;
       }
-      
       // Add message to Firestore
       await addDoc(collection(db, "messages"), {
         roomId: contactData.roomId,

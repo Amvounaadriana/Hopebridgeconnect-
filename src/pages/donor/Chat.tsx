@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { listenToUserPresence } from "@/services/volunteer-service";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,7 @@ const DonorChat = () => {
   const [messageText, setMessageText] = useState("");
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [presenceUnsubs, setPresenceUnsubs] = useState<Record<string, () => void>>({});
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -283,6 +285,19 @@ const DonorChat = () => {
         const allContacts = [...adminContacts, ...donorContacts].filter((contact, idx, arr) =>
           arr.findIndex(c => c.id === contact.id) === idx
         );
+        // Set up presence listeners for each contact
+        const newPresenceUnsubs: Record<string, () => void> = {};
+        allContacts.forEach(contact => {
+          newPresenceUnsubs[contact.id] = listenToUserPresence(
+            contact.id,
+            (online) => {
+              setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, status: online ? "online" : "offline" } : c));
+            }
+          );
+        });
+        // Clean up old listeners
+        Object.values(presenceUnsubs).forEach(unsub => unsub && unsub());
+        setPresenceUnsubs(newPresenceUnsubs);
         setContacts(allContacts);
         if (allContacts.length > 0 && !selectedContact) {
           setSelectedContact(allContacts[0].id);
@@ -302,6 +317,14 @@ const DonorChat = () => {
     fetchDonorContacts();
   }, [currentUser?.uid, toast]);
   
+  // Clean up presence listeners on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(presenceUnsubs).forEach(unsub => unsub && unsub());
+    };
+    // eslint-disable-next-line
+  }, []);
+
   // Fetch messages for selected contact
   useEffect(() => {
     if (!selectedContact || !currentUser?.uid) return;

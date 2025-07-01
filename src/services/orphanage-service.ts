@@ -52,24 +52,16 @@ export const getOrphanagesByAdminId = async (adminId: string) => {
   }
 };
 
-export const createOrphanage = async (orphanageData: Omit<Orphanage, 'id' | 'createdAt'>) => {
+export const createOrphanage = async (orphanageData: Omit<Orphanage, 'id' | 'createdAt' | 'updatedAt'>) => {
   try {
-    console.log("Creating orphanage with data:", orphanageData);
     const orphanageCollection = collection(db, "orphanages");
-    const newOrphanage = {
+    const now = Date.now();
+    const newOrphanage: Omit<Orphanage, 'id'> = {
       ...orphanageData,
-      createdAt: Date.now()
+      createdAt: now,
+      updatedAt: now
     };
-    
     const docRef = await addDoc(orphanageCollection, newOrphanage);
-    console.log("Orphanage created with ID:", docRef.id);
-    
-    // Verify the document was created by fetching it
-    const verifyDoc = await getDoc(docRef);
-    if (!verifyDoc.exists()) {
-      throw new Error("Failed to create orphanage - document not found after creation");
-    }
-    
     return { id: docRef.id, ...newOrphanage } as Orphanage;
   } catch (error) {
     console.error("Error creating orphanage:", error);
@@ -77,15 +69,13 @@ export const createOrphanage = async (orphanageData: Omit<Orphanage, 'id' | 'cre
   }
 };
 
-export const updateOrphanage = async (orphanageId: string, orphanageData: Partial<Orphanage>) => {
+export const updateOrphanage = async (orphanageId: string, orphanageData: Partial<Omit<Orphanage, 'id'>>) => {
   try {
     const docRef = doc(db, "orphanages", orphanageId);
     await updateDoc(docRef, {
       ...orphanageData,
       updatedAt: Date.now()
     });
-    
-    // Get the updated document
     const updatedDoc = await getDoc(docRef);
     return { id: updatedDoc.id, ...updatedDoc.data() } as Orphanage;
   } catch (error) {
@@ -150,32 +140,15 @@ export const getChildById = async (childId: string) => {
 
 export const addChild = async (childData: Omit<Child, 'id' | 'createdAt'>) => {
   try {
-    // Validate required fields
     if (!childData.name || !childData.orphanageId) {
-      console.error("Missing required fields:", { 
-        name: childData.name, 
-        orphanageId: childData.orphanageId 
-      });
       throw new Error("Missing required fields: name and orphanageId are required");
     }
-
-    console.log("Adding child with data:", childData);
-    
     const childrenCollection = collection(db, "children");
-    const newChild = {
+    const newChild: Omit<Child, 'id'> = {
       ...childData,
       createdAt: Date.now()
     };
-    
     const docRef = await addDoc(childrenCollection, newChild);
-    
-    // Verify the document was created
-    const verifyDoc = await getDoc(docRef);
-    if (!verifyDoc.exists()) {
-      throw new Error("Failed to create child - document not found after creation");
-    }
-    
-    console.log("Child created successfully with ID:", docRef.id);
     return { id: docRef.id, ...newChild } as Child;
   } catch (error) {
     console.error("Error adding child:", error);
@@ -183,15 +156,12 @@ export const addChild = async (childData: Omit<Child, 'id' | 'createdAt'>) => {
   }
 };
 
-export const updateChild = async (childId: string, childData: Partial<Child>) => {
+export const updateChild = async (childId: string, childData: Partial<Omit<Child, 'id'>>) => {
   try {
     const docRef = doc(db, "children", childId);
     await updateDoc(docRef, {
-      ...childData,
-      updatedAt: Date.now()
+      ...childData
     });
-    
-    // Get the updated document
     const updatedDoc = await getDoc(docRef);
     return { id: updatedDoc.id, ...updatedDoc.data() } as Child;
   } catch (error) {
@@ -268,12 +238,11 @@ export const getWishesByOrphanage = async (orphanageId: string) => {
 export const addWish = async (wishData: Omit<Wish, 'id' | 'createdAt'>) => {
   try {
     const wishesCollection = collection(db, "wishes");
-    const newWish = {
+    const newWish: Omit<Wish, 'id'> = {
       ...wishData,
       status: wishData.status || "pending",
       createdAt: Date.now()
     };
-    
     const docRef = await addDoc(wishesCollection, newWish);
     return { id: docRef.id, ...newWish } as Wish;
   } catch (error) {
@@ -285,19 +254,14 @@ export const addWish = async (wishData: Omit<Wish, 'id' | 'createdAt'>) => {
 export const updateWishStatus = async (wishId: string, status: Wish['status'], donorId?: string, donorName?: string) => {
   try {
     const docRef = doc(db, "wishes", wishId);
-    const updateData: any = {
-      status,
-      updatedAt: Date.now()
+    const updateData: Partial<Omit<Wish, 'id'>> = {
+      status
     };
-    
     if (donorId && donorName) {
       updateData.donorId = donorId;
       updateData.donorName = donorName;
     }
-    
     await updateDoc(docRef, updateData);
-    
-    // Get the updated document
     const updatedDoc = await getDoc(docRef);
     return { id: updatedDoc.id, ...updatedDoc.data() } as Wish;
   } catch (error) {

@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
 import { 
   collection, query, where, getDocs, doc, 
-  updateDoc, deleteDoc, serverTimestamp 
+  updateDoc, deleteDoc, serverTimestamp, getDoc 
 } from "firebase/firestore";
 import {
   Card,
@@ -64,18 +64,6 @@ export default function VolunteerApplications() {
   const { toast } = useToast();
   const { userProfile } = useAuth();
 
-  // Type guard: orphanageId must exist for admin to view applications
-  useEffect(() => {
-    if (!userProfile || !('orphanageId' in userProfile) || !userProfile.orphanageId) {
-      toast({
-        title: "Access Denied",
-        description: "You must be an orphanage administrator to view applications. Please ensure your admin profile includes an orphanageId.",
-        variant: "destructive"
-      });
-      navigate("/admin/dashboard");
-    }
-  }, [userProfile, navigate, toast]);
-  
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -87,25 +75,47 @@ export default function VolunteerApplications() {
   
   useEffect(() => {
     const fetchApplications = async () => {
-      // Type guard: orphanageId must exist for admin to view applications
-      if (!userProfile || !userProfile.orphanageId) {
+      // Always get orphanageId and orphanageName from user document or orphanages collection
+      let orphanageId: string | undefined = undefined;
+      let orphanageName: string | undefined = undefined;
+      let userUid = userProfile?.uid;
+      // Fetch from user document
+      if (userProfile?.uid) {
+        const userDoc = await getDoc(doc(db, "users", userProfile.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          orphanageId = userData.orphanageId;
+          orphanageName = userData.orphanageName;
+          userUid = userData.uid || userUid;
+        }
+      }
+      // Fallback: query orphanages collection by adminId if still missing
+      if ((!orphanageId || !orphanageName) && userUid) {
+        const orphanagesRef = collection(db, "orphanages");
+        const orphanageQuery = query(orphanagesRef, where("adminId", "==", userUid));
+        const orphanageSnapshot = await getDocs(orphanageQuery);
+        if (!orphanageSnapshot.empty) {
+          const orphanageData = orphanageSnapshot.docs[0].data();
+          orphanageId = orphanageData.id || orphanageSnapshot.docs[0].id;
+          orphanageName = orphanageData.name;
+        }
+      }
+      if (!orphanageId || !orphanageName) {
         toast({
           title: "Access Denied",
-          description: "You must be an orphanage administrator to view applications. Please ensure your admin profile includes an orphanageId.",
+          description: "You must be an orphanage administrator to view applications. Please ensure your admin profile includes an orphanageId and orphanageName.",
           variant: "destructive"
         });
         navigate("/admin/dashboard");
         return;
       }
-
       try {
         setLoading(true);
-        
         // Query applications for this orphanage
         const applicationsRef = collection(db, "volunteerApplications");
         const q = query(
           applicationsRef,
-          where("orphanageId", "==", userProfile.orphanageId),
+          where("orphanageId", "==", orphanageId),
           where("status", "==", "pending")
         );
         
@@ -165,13 +175,32 @@ export default function VolunteerApplications() {
   
   useEffect(() => {
     async function fetchCoords() {
-      if (userProfile?.orphanageName) {
-        const coords = await geocodeAddress(userProfile.orphanageName);
+      let orphanageName: string | undefined = undefined;
+      // Try to get from user document
+      if (userProfile?.uid) {
+        const userDoc = await getDoc(doc(db, "users", userProfile.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          orphanageName = userData.orphanageName;
+        }
+      }
+      // Fallback: query orphanages collection by adminId if still missing
+      if (!orphanageName && userProfile?.uid) {
+        const orphanagesRef = collection(db, "orphanages");
+        const orphanageQuery = query(orphanagesRef, where("adminId", "==", userProfile.uid));
+        const orphanageSnapshot = await getDocs(orphanageQuery);
+        if (!orphanageSnapshot.empty) {
+          const orphanageData = orphanageSnapshot.docs[0].data();
+          orphanageName = orphanageData.name;
+        }
+      }
+      if (orphanageName) {
+        const coords = await geocodeAddress(orphanageName);
         setOrphanageCoords(coords);
       }
     }
     fetchCoords();
-  }, [userProfile?.orphanageName]);
+  }, [userProfile]);
   
   const handleApprove = async (application: Application) => {
     if (!application.volunteerDetails?.email) {
@@ -385,7 +414,8 @@ export default function VolunteerApplications() {
                     )}
                     {orphanageCoords && (
                       <div className="mt-4">
-                        <OrphanageMap lat={orphanageCoords.lat} lng={orphanageCoords.lng} name={userProfile?.orphanageName || "Orphanage"} />
+                        {/* OrphanageMap does not accept lat/lng props; just render the map */}
+                        <OrphanageMap />
                       </div>
                     )}
                   </div>

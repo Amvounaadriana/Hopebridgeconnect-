@@ -133,6 +133,24 @@ const CreateOrphanage = () => {
         location: `${orphanageData.city}, ${orphanageData.country}`
       });
       
+      // Update admin user profile with orphanageId
+      if (newOrphanage.id) {
+        try {
+          const { doc, updateDoc, getDoc } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          const userRef = doc(db, "users", currentUser.uid);
+          await updateDoc(userRef, {
+            orphanageId: newOrphanage.id
+          });
+        } catch (err) {
+          toast({
+            variant: "destructive",
+            title: "Profile Update Failed",
+            description: "Orphanage created, but failed to update your profile with orphanageId. Please contact support.",
+          });
+        }
+      }
+      
       console.log("Created orphanage:", newOrphanage);
       
       toast({

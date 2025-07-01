@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
@@ -66,36 +65,29 @@ const VolunteerCalendar = () => {
   useEffect(() => {
     const fetchData = async () => {
       if (!currentUser?.uid) return;
-      
       try {
         setLoading(true);
-        
-        // First try to get the orphanageId from userProfile
-        let orphId = userProfile?.orphanageId;
-        let orphName = "";
-        
-        // If not found in userProfile, try to get it from the user document
-        if (!orphId) {
+        // Always get orphanageId and orphanageName from user document if not present in userProfile
+        let orphId = userProfile && typeof userProfile === 'object' && 'orphanageId' in userProfile ? (userProfile as any).orphanageId : undefined;
+        let orphName = userProfile && typeof userProfile === 'object' && 'orphanageName' in userProfile ? (userProfile as any).orphanageName : "";
+        if (!orphId || !orphName) {
           const userDoc = await getDoc(doc(db, "users", currentUser.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            orphId = userData.orphanageId;
+            orphId = userData.orphanageId || orphId;
+            orphName = userData.orphanageName || orphName || "";
           }
         }
-        
-        // If still not found, try to get the orphanage by adminId
         if (!orphId) {
           const orphanagesRef = collection(db, "orphanages");
           const q = query(orphanagesRef, where("adminId", "==", currentUser.uid));
           const orphanagesSnapshot = await getDocs(q);
-          
           if (!orphanagesSnapshot.empty) {
             const orphDoc = orphanagesSnapshot.docs[0];
             orphId = orphDoc.id;
             orphName = orphDoc.data().name || "My Orphanage";
           }
         }
-        
         if (!orphId) {
           toast({
             title: "No Orphanage Found",
@@ -105,21 +97,16 @@ const VolunteerCalendar = () => {
           setLoading(false);
           return;
         }
-        
-        // If we have an orphId but no name yet, fetch the orphanage details
         if (orphId && !orphName) {
           const orphDoc = await getDoc(doc(db, "orphanages", orphId));
           if (orphDoc.exists()) {
             orphName = orphDoc.data().name || "My Orphanage";
           }
         }
-        
-        // Set the user's orphanage
         setUserOrphanage({
           id: orphId,
           name: orphName
         });
-        
         // Fetch volunteers for this orphanage
         const volunteersRef = collection(db, "users");
         const volunteersQuery = query(

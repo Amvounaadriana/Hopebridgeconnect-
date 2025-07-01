@@ -45,24 +45,18 @@ const AddChild = () => {
       try {
         setLoading(true);
         let id = null;
-        // First check if it's in userProfile
-        if (userProfile?.orphanageId) {
-          id = userProfile.orphanageId;
-        } else {
-          // Otherwise, try to get it from the user document
-          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            if (userData.orphanageId) id = userData.orphanageId;
-          }
+        // Try to get orphanageId from user document
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.orphanageId) id = userData.orphanageId;
         }
         if (!id) {
-          // If still not found, try to get the orphanage by adminId
+          // Try to get the orphanage by adminId
           const orphanages = await getOrphanagesByAdminId(currentUser.uid);
           if (orphanages.length > 0) id = orphanages[0].id;
         }
         if (!id) {
-          // If we get here, no orphanage was found
           toast({
             variant: "destructive",
             title: "No Orphanage Found",

@@ -69,15 +69,11 @@ const AdminPayments = () => {
   const exportPayments = () => {
     if (payments.length === 0) return;
 
-    const headers = ["Donor Name", "Email", "Amount", "Type", "Purpose", "Date", "Status"];
+    const headers = ["Date", "Donor Name", "Amount"];
     const csvData = payments.map(payment => [
-      payment.donorName || "Anonymous",
-      payment.donorEmail || "N/A",
-      payment.amount.toString(),
-      payment.paymentType,
-      payment.purpose,
       formatDate(payment.createdAt),
-      payment.status
+      payment.donorName || "Anonymous",
+      payment.amount.toString()
     ]);
 
     const csvContent = [
@@ -251,55 +247,24 @@ const AdminPayments = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Donor</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Purpose</TableHead>
                 <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Donor Name</TableHead>
+                <TableHead>Amount</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={3} className="text-center py-8">
                     No payments match your search criteria
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredPayments.map(payment => (
                   <TableRow key={payment.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{payment.donorName || "Anonymous"}</p>
-                        <p className="text-xs text-muted-foreground">{payment.donorEmail || "No email provided"}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        payment.paymentType === "monetary" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
-                      }`}>
-                        {payment.paymentType}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {payment.paymentType === "monetary" 
-                        ? formatCurrency(payment.amount) 
-                        : "N/A"}
-                    </TableCell>
-                    <TableCell>
-                      <span className="line-clamp-2">{payment.purpose || "General donation"}</span>
-                    </TableCell>
                     <TableCell>{formatDate(payment.createdAt)}</TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        payment.status === "completed" || payment.status === "successful" ? "bg-green-100 text-green-800" :
-                        payment.status === "pending" ? "bg-yellow-100 text-yellow-800" :
-                        "bg-red-100 text-red-800"
-                      }`}>
-                        {payment.status === "completed" ? "Successful" : payment.status}
-                      </span>
-                    </TableCell>
+                    <TableCell>{payment.donorName || "Anonymous"}</TableCell>
+                    <TableCell>{formatCurrency(payment.amount)}</TableCell>
                   </TableRow>
                 ))
               )}

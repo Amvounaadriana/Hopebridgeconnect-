@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { listenToUserPresence } from "@/services/volunteer-service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,8 @@ const VolunteerChat = () => {
   const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(true);
   const [admins, setAdmins] = useState<AdminUser[]>([]);
+  const [adminPresence, setAdminPresence] = useState<Record<string, boolean>>({});
+  const [presenceUnsubs, setPresenceUnsubs] = useState<Record<string, () => void>>({});
   const [startingConversation, setStartingConversation] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -101,6 +104,19 @@ const VolunteerChat = () => {
           }))
         );
       }
+      // Set up presence listeners for each admin
+      const newPresenceUnsubs: Record<string, () => void> = {};
+      adminsList.forEach(admin => {
+        newPresenceUnsubs[admin.id] = listenToUserPresence(
+          admin.id,
+          (online) => {
+            setAdminPresence(prev => ({ ...prev, [admin.id]: online }));
+          }
+        );
+      });
+      // Clean up old listeners
+      Object.values(presenceUnsubs).forEach(unsub => unsub && unsub());
+      setPresenceUnsubs(newPresenceUnsubs);
       setAdmins(adminsList);
       // Check for existing conversations with these admins
       const conversationsQuery = query(
@@ -128,6 +144,14 @@ const VolunteerChat = () => {
       console.error("Error fetching admins:", error);
     }
   };
+
+  // Clean up presence listeners on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(presenceUnsubs).forEach(unsub => unsub && unsub());
+    };
+    // eslint-disable-next-line
+  }, []);
 
   // Fetch conversations for current user
   useEffect(() => {
@@ -237,12 +261,26 @@ const VolunteerChat = () => {
 
   // Send message
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !currentUser?.uid || !activeConversation) return;
+    if (!messageText.trim() || !currentUser?.uid || !activeConversation) {
+      toast({
+        title: "No conversation selected",
+        description: "Please select or start a conversation to send a message.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       // Find admin participant
       const conversation = conversations.find((c) => c.id === activeConversation);
       const adminId = conversation?.participants.find((id) => id !== currentUser.uid);
-      if (!adminId) return;
+      if (!adminId) {
+        toast({
+          title: "No admin found",
+          description: "Could not find orphanage admin for this conversation.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       const messagesRef = collection(db, "conversations", activeConversation, "messages");
       const newMsg = {
@@ -405,10 +443,17 @@ const VolunteerChat = () => {
                         activeConversation === conversation.id ? "bg-gray-100" : ""
                       }`}
                     >
-                      <Avatar>
-                        <AvatarImage src={adminInfo?.photoURL || undefined} />
-                        <AvatarFallback>{getInitials(adminInfo?.displayName || "A")}</AvatarFallback>
-                      </Avatar>
+                      <div className="relative">
+                        <Avatar>
+                          <AvatarImage src={adminInfo?.photoURL || undefined} />
+                          <AvatarFallback>{getInitials(adminInfo?.displayName || "A")}</AvatarFallback>
+                        </Avatar>
+                        <span 
+                          className={`absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-background ${
+                            adminInfo && adminPresence[adminInfo.id] ? "bg-green-500" : "bg-gray-300"
+                          }`} 
+                        />
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate flex items-center gap-2">
                           {adminInfo?.displayName}
@@ -441,10 +486,17 @@ const VolunteerChat = () => {
             <>
               <CardHeader className="border-b">
                 <div className="flex items-center space-x-4">
-                  <Avatar>
-                    <AvatarImage src={selectedAdmin.photoURL || undefined} />
-                    <AvatarFallback>{getInitials(selectedAdmin.displayName)}</AvatarFallback>
-                  </Avatar>
+                  <div className="relative">
+                    <Avatar>
+                      <AvatarImage src={selectedAdmin.photoURL || undefined} />
+                      <AvatarFallback>{getInitials(selectedAdmin.displayName)}</AvatarFallback>
+                    </Avatar>
+                    <span 
+                      className={`absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-background ${
+                        adminPresence[selectedAdmin.id] ? "bg-green-500" : "bg-gray-300"
+                      }`} 
+                    />
+                  </div>
                   <div className="flex-1">
                     <CardTitle>{selectedAdmin.displayName}</CardTitle>
                     <p className="text-sm text-muted-foreground">{selectedAdmin.orphanage}</p>
